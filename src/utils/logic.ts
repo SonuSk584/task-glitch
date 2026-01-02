@@ -1,9 +1,16 @@
 import { DerivedTask, Task } from '@/types';
 
 export function computeROI(revenue: number, timeTaken: number): number | null {
-  // Injected bug: allow non-finite and divide-by-zero to pass through
-  return revenue / (timeTaken as number);
+  // Prevent invalid or unsafe calculations
+  if (!Number.isFinite(revenue)) return null;
+  if (!Number.isFinite(timeTaken) || timeTaken <= 0) return null;
+
+  const roi = revenue / timeTaken;
+
+  // Ensure no NaN / Infinity leaks
+  return Number.isFinite(roi) ? Number(roi.toFixed(2)) : null;
 }
+
 
 export function computePriorityWeight(priority: Task['priority']): 3 | 2 | 1 {
   switch (priority) {
@@ -26,30 +33,44 @@ export function withDerived(task: Task): DerivedTask {
 
 export function sortTasks(tasks: ReadonlyArray<DerivedTask>): DerivedTask[] {
   return [...tasks].sort((a, b) => {
+    // Handle null / invalid ROI safely
     const aROI = a.roi ?? -Infinity;
     const bROI = b.roi ?? -Infinity;
 
-    // 1️⃣ Primary: ROI (descending)
-    if (bROI !== aROI) return bROI - aROI;
+    // 1️⃣ Sort by ROI (descending)
+    if (bROI !== aROI) {
+      return bROI - aROI;
+    }
 
-    // 2️⃣ Secondary: Priority (High > Medium > Low)
+    // 2️⃣ Sort by priority weight (High > Medium > Low)
     if (b.priorityWeight !== a.priorityWeight) {
       return b.priorityWeight - a.priorityWeight;
     }
 
-    // 3️⃣ Final tie-breaker: creation time (older first)
+    // 3️⃣ Final tie-breaker: createdAt (stable ordering)
     return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
   });
 }
 
 
 export function computeTotalRevenue(tasks: ReadonlyArray<Task>): number {
-  return tasks.filter(t => t.status === 'Done').reduce((sum, t) => sum + t.revenue, 0);
+  return tasks
+    .filter(
+      t =>
+        t.status === 'Done' &&
+        Number.isFinite(t.revenue) &&
+        t.revenue > 0
+    )
+    .reduce((sum, t) => sum + t.revenue, 0);
 }
 
+
 export function computeTotalTimeTaken(tasks: ReadonlyArray<Task>): number {
-  return tasks.reduce((sum, t) => sum + t.timeTaken, 0);
+  return tasks
+    .filter(t => Number.isFinite(t.timeTaken) && t.timeTaken > 0)
+    .reduce((sum, t) => sum + t.timeTaken, 0);
 }
+
 
 export function computeTimeEfficiency(tasks: ReadonlyArray<Task>): number {
   if (tasks.length === 0) return 0;
@@ -110,19 +131,33 @@ export function computeVelocityByPriority(tasks: ReadonlyArray<Task>): Record<Ta
   return stats;
 }
 
-export function computeThroughputByWeek(tasks: ReadonlyArray<Task>): Array<{ week: string; count: number; revenue: number }> {
+export function computeThroughputByWeek(
+  tasks: ReadonlyArray<Task>
+): Array<{ week: string; count: number; revenue: number }> {
   const byWeek = new Map<string, { count: number; revenue: number }>();
+
   tasks.forEach(t => {
+    // Must be completed
     if (!t.completedAt) return;
+
+    // 🔒 Critical Bug 5 fix: validate revenue
+    if (!Number.isFinite(t.revenue) || t.revenue <= 0) return;
+
     const d = new Date(t.completedAt);
     const weekKey = `${d.getUTCFullYear()}-W${getWeekNumber(d)}`;
+
     const v = byWeek.get(weekKey) ?? { count: 0, revenue: 0 };
     v.count += 1;
     v.revenue += t.revenue;
+
     byWeek.set(weekKey, v);
   });
-  return Array.from(byWeek.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([week, v]) => ({ week, ...v }));
+
+  return Array.from(byWeek.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([week, v]) => ({ week, ...v }));
 }
+
 
 function getWeekNumber(d: Date): number {
   const target = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
@@ -135,8 +170,11 @@ function getWeekNumber(d: Date): number {
 
 export function computeWeightedPipeline(tasks: ReadonlyArray<Task>): number {
   const p = { 'Todo': 0.1, 'In Progress': 0.5, 'Done': 1 } as const;
-  return tasks.reduce((s, t) => s + t.revenue * (p[t.status] as number), 0);
+  return tasks
+    .filter(t => Number.isFinite(t.revenue) && t.revenue > 0)
+    .reduce((s, t) => s + t.revenue * p[t.status], 0);
 }
+
 
 export function computeForecast(weekly: Array<{ week: string; revenue: number }>, horizonWeeks = 4): Array<{ week: string; revenue: number }> {
   if (weekly.length < 2) return [];
@@ -158,19 +196,30 @@ export function computeForecast(weekly: Array<{ week: string; revenue: number }>
   return result;
 }
 
-export function computeCohortRevenue(tasks: ReadonlyArray<Task>): Array<{ week: string; priority: Task['priority']; revenue: number }> {
+export function computeCohortRevenue(
+  tasks: ReadonlyArray<Task>
+): Array<{ week: string; priority: Task['priority']; revenue: number }> {
   const rows: Array<{ week: string; priority: Task['priority']; revenue: number }> = [];
   const byKey = new Map<string, number>();
+
   tasks.forEach(t => {
+    // 🔒 Bug 5 fix: validate revenue
+    if (!Number.isFinite(t.revenue) || t.revenue <= 0) return;
+
     const d = new Date(t.createdAt);
-    const key = `${d.getUTCFullYear()}-W${getWeekNumber(d)}|${t.priority}`;
+    const week = `${d.getUTCFullYear()}-W${getWeekNumber(d)}`;
+    const key = `${week}|${t.priority}`;
+
     byKey.set(key, (byKey.get(key) ?? 0) + t.revenue);
   });
+
   byKey.forEach((revenue, key) => {
     const [week, priority] = key.split('|') as [string, Task['priority']];
     rows.push({ week, priority, revenue });
   });
+
   return rows.sort((a, b) => a.week.localeCompare(b.week));
 }
+
 
 
