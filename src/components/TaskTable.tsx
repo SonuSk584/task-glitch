@@ -34,12 +34,13 @@ export default function TaskTable({ tasks, onAdd, onUpdate, onDelete }: Props) {
   const [editing, setEditing] = useState<Task | null>(null);
   const [details, setDetails] = useState<Task | null>(null);
 
-  const existingTitles = useMemo(() => tasks.map((t) => t.title), [tasks]);
+  const existingTitles = useMemo(() => tasks.map(t => t.title), [tasks]);
 
   const handleAddClick = () => {
     setEditing(null);
     setOpenForm(true);
   };
+
   const handleEditClick = (task: Task) => {
     setEditing(task);
     setOpenForm(true);
@@ -57,23 +58,15 @@ export default function TaskTable({ tasks, onAdd, onUpdate, onDelete }: Props) {
   return (
     <Card>
       <CardContent>
-        <Stack
-          direction="row"
-          alignItems="center"
-          justifyContent="space-between"
-          mb={2}
-        >
+        <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}>
           <Typography variant="h6" fontWeight={700}>
             Tasks
           </Typography>
-          <Button
-            startIcon={<AddIcon />}
-            variant="contained"
-            onClick={handleAddClick}
-          >
+          <Button startIcon={<AddIcon />} variant="contained" onClick={handleAddClick}>
             Add Task
           </Button>
         </Stack>
+
         <TableContainer sx={{ maxHeight: 520 }}>
           <Table stickyHeader>
             <TableHead>
@@ -87,13 +80,14 @@ export default function TaskTable({ tasks, onAdd, onUpdate, onDelete }: Props) {
                 <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
+
             <TableBody>
-              {tasks.map((t) => (
+              {tasks.map(t => (
                 <TableRow
                   key={`${t.id ?? "missing"}-${t.createdAt}`}
                   hover
-                  onClick={() => setDetails(t)}
                   sx={{ cursor: "pointer" }}
+                  onClick={() => setDetails(t)}
                 >
                   <TableCell>
                     <Stack spacing={0.5}>
@@ -110,43 +104,42 @@ export default function TaskTable({ tasks, onAdd, onUpdate, onDelete }: Props) {
                       )}
                     </Stack>
                   </TableCell>
+
                   <TableCell align="right">
-  {Number.isFinite(t.revenue) ? `$${t.revenue.toLocaleString()}` : '—'}
-</TableCell>
+                    {Number.isFinite(t.revenue) ? `$${t.revenue.toLocaleString()}` : "—"}
+                  </TableCell>
 
-                 <TableCell align="right">
-  {t.timeTaken > 0 ? t.timeTaken : '—'}
-</TableCell>
-
+                  <TableCell align="right">
+                    {t.timeTaken > 0 ? t.timeTaken : "—"}
+                  </TableCell>
 
                   <TableCell align="right">
                     {t.roi == null ? "N/A" : t.roi.toFixed(1)}
                   </TableCell>
+
                   <TableCell>{t.priority}</TableCell>
                   <TableCell>{t.status}</TableCell>
+
                   <TableCell align="right">
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      justifyContent="flex-end"
-                    >
+                    <Stack direction="row" spacing={1} justifyContent="flex-end">
                       <Tooltip title="Edit">
                         <IconButton
                           size="small"
                           onClick={(e) => {
-                            e.stopPropagation();
+                            e.stopPropagation(); // ✅ prevents View dialog
                             handleEditClick(t);
                           }}
                         >
                           <EditIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
+
                       <Tooltip title="Delete">
                         <IconButton
                           size="small"
                           color="error"
                           onClick={(e) => {
-                            e.stopPropagation();
+                            e.stopPropagation(); // ✅ prevents View dialog
                             onDelete(t.id);
                           }}
                         >
@@ -157,6 +150,7 @@ export default function TaskTable({ tasks, onAdd, onUpdate, onDelete }: Props) {
                   </TableCell>
                 </TableRow>
               ))}
+
               {tasks.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7}>
@@ -170,6 +164,7 @@ export default function TaskTable({ tasks, onAdd, onUpdate, onDelete }: Props) {
           </Table>
         </TableContainer>
       </CardContent>
+
       <TaskForm
         open={openForm}
         onClose={() => setOpenForm(false)}
@@ -177,6 +172,7 @@ export default function TaskTable({ tasks, onAdd, onUpdate, onDelete }: Props) {
         existingTitles={existingTitles}
         initial={editing}
       />
+
       <TaskDetailsDialog
         open={!!details}
         task={details}
